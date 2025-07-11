@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+    xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+    layout:decorate="~{layouts/base}">
+<body>
+    <div layout:fragment="content">
+        <header class="bg-dark py-5 text-white text-center">
+    <div class="container">
+        <h1 class="display-4">Your Shopping Cart</h1>
+        <p class="lead">Review your selected items</p>
+    </div>
+</header>
+<section class="py-5">
+    <div class="container my-5">
+        <p class = "text-center" th:if="${#lists.isEmpty(cart.cartItems)}">장바구니가 비어 있습니다.</p>
+        <div th:unless="${#lists.isEmpty(cart.cartItems)}">
+            <!-- cartItems 출력 테이블 -->
+            <table class="table table-bordered table-hover text-center">
+                <thead class="table-dark">
+                <tr>
+                    <th>Image</th>
+                    <th>Product</th>
+                    <th>Unit Price</th>
+                    <th>Quantity</th>
+                    <th>Total</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="item : ${cart.cartItems}">
+                    <td><img th:src="${item.image_url}" width="100" alt="..."/></td>
+                    <td th:text="${item.name}">#상품명</td>
+                    <td th:text="${item.price}">#가격</td>
+                    <td th:text="${item.quantity}">#수량</td>
+                    <td th:text="|$ ${item.totalPrice}|">#상품당 가격</td>
+                    <td>
+                        <form action="/cart/remove" method="post">
+                            <input type="hidden" name="productId" th:value="${item.productId}">
+                            <button type="submit" class="btn btn-danger btn-sm">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+            <!-- 장바구니에 담은 상품 총 가격 -->
+            <div class="text-end">
+                <h4 th:text="|Total: $ ${cart.totalPrice}|"> # 총 가격 </h4>
+                <a href="#" class="btn btn-success mt-3">Checkout</a>
+            </div>
+        </div>
+    </div>
+</section>
+</body>
+</html>

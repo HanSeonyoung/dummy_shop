@@ -1,0 +1,55 @@
+{{>layouts/header}}
+<header class="bg-dark py-5 text-white text-center">
+    <div class="container">
+        <h1 class="display-4">Your Shopping Cart</h1>
+        <p class="lead">Review your selected items</p>
+    </div>
+</header>
+<section class="py-5">
+    {{#cart}}
+    <div class="container my-5">
+        {{#isEmpty}}
+        <p class = "text-center">장바구니가 비어 있습니다.</p>
+        {{/isEmpty}}
+        {{^isEmpty}}
+        <!-- cartItems 출력 테이블 -->
+        <table class="table table-bordered table-hover text-center">
+            <thead class="table-dark">
+            <tr>
+                <th>Image</th>
+                <th>Product</th>
+                <th>Unit Price</th>
+                <th>Quantity</th>
+                <th>Total</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            {{#cartItems}}
+            <tr>
+                <td><img src="{{image_url}}" width="100" alt="{{name}}"/></td>
+                <td>{{name}}</td>
+                <td>$ {{price}}</td>
+                <td>{{quantity}}</td>
+                <td>$ {{totalPrice}}</td>
+                <td>
+                    <form action="/cart/remove" method="post">
+                        <input type="hidden" name="productId" value="{{productId}}">
+                        <button type="submit" class="btn btn-danger btn-sm">Remove</button>
+                    </form>
+                </td>
+            </tr>
+            {{/cartItems}}
+            </tbody>
+        </table>
+        <div class="text-end">
+            <h4>Total: $ {{totalPrice}} </h4>
+            <a href="#" class="btn btn-success mt-3">Checkout</a>
+            <!--    href="/checkout"    -->
+        </div>
+        {{/isEmpty}}
+    </div>
+    {{/cart}}
+</section>
+
+{{>layouts/footer}}
