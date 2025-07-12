@@ -1,0 +1,317 @@
+@startuml
+!theme plain
+title 시스템 전체 요청 처리 플로우 
+skinparam sequenceMessageAlign center
+
+actor "사용자" as User
+participant "브라우저" as Browser
+participant "DispatcherServlet" as Dispatcher
+participant "UserContextInterceptor" as Interceptor
+participant "UserContextService" as ContextService
+participant "Controller" as Controller
+participant "GlobalControllerAdvice" as Advice
+participant "Service" as Service
+participant "Repository" as Repository
+participant "Thymeleaf" as Template
+
+== 요청 처리 플로우 ==
+
+User -> Browser : 페이지 요청
+Browser -> Dispatcher : HTTP Request
+
+note over Dispatcher : Spring Boot 내부 처리 시작
+
+Dispatcher -> Interceptor : preHandle()
+activate Interceptor
+
+Interceptor -> Interceptor : HttpSession에서\n사용자 정보 추출
+note right : sessionId, userId, username
+
+Interceptor -> ContextService : setContext(sessionId, userId, username)
+activate ContextService
+ContextService -> ContextService : ThreadLocal에\nUserInfo 저장
+deactivate ContextService
+
+Interceptor --> Dispatcher : return true
+deactivate Interceptor
+
+Dispatcher -> Advice : @ModelAttribute 메서드 실행
+activate Advice
+
+Advice -> ContextService : getCurrentUser()
+ContextService --> Advice : UserInfo
+
+Advice -> Service : getCartItemCount()
+Service -> ContextService : getCurrentUser()
+ContextService --> Service : UserInfo (세션 또는 사용자 ID)
+Service -> Repository : findBySessionId() 또는 findByUserId()
+Repository --> Service : List<Cart>
+Service --> Advice : cartItemCount
+
+Advice --> Dispatcher : Model에 전역 데이터 추가\n(currentUser, cartItemCount)
+deactivate Advice
+
+Dispatcher -> Controller : 실제 컨트롤러 메서드 실행
+activate Controller
+
+Controller -> Service : 비즈니스 로직 실행
+Service -> ContextService : getCurrentUser()
+ContextService --> Service : UserInfo
+Service -> Repository : 데이터 조회/수정
+Repository --> Service : 결과
+Service --> Controller : 처리 결과
+
+Controller --> Dispatcher : View 이름 + Model 데이터
+deactivate Controller
+
+Dispatcher -> Template : 템플릿 렌더링
+activate Template
+Template -> Template : Model 데이터와\n전역 데이터 병합
+Template --> Dispatcher : 완성된 HTML
+deactivate Template
+
+Dispatcher -> Interceptor : afterCompletion()
+activate Interceptor
+Interceptor -> ContextService : clear()
+ContextService -> ContextService : ThreadLocal 정리
+Interceptor --> Dispatcher : 완료
+deactivate Interceptor
+
+Dispatcher --> Browser : HTTP Response (HTML)
+Browser --> User : 렌더링된 페이지
+
+note over ContextService : 🔑 핵심: ThreadLocal로\n요청별 사용자 컨텍스트 격리
+
+@enduml
+
+@startuml
+!theme plain
+title 컴포넌트 다이어그램
+
+package "Web Layer" {
+    [DispatcherServlet] as DS
+    [Thymeleaf Template Engine] as TTE
+}
+
+package "Cross-cutting Concerns" <<Global>> {
+    [UserContextInterceptor] as UCI 
+    [GlobalControllerAdvice] as GCA 
+    [UserContextService] as UCS 
+}
+
+package "Business Layer" {
+    [ShopController] as SC
+    [CartController] as CC
+    [GoodsService] as GS
+    [CartService] as CS
+}
+
+package "Data Access Layer" {
+    [GoodsRepository] as GR
+    [CartRepository] as CR
+    [H2 Database] as DB
+}
+
+' 웹 레이어 연결
+DS --> UCI : 모든 요청 인터셉트
+DS --> GCA : @ModelAttribute 실행
+DS --> SC : /shop/** 요청
+DS --> CC : /cart/** 요청
+DS --> TTE : 뷰 렌더링
+
+' 횡단 관심사 연결
+UCI --> UCS : 사용자 컨텍스트 설정
+GCA --> UCS : 전역 사용자 정보
+GCA --> CS : 전역 장바구니 정보
+
+' 비즈니스 레이어 연결
+SC --> GS : 상품 로직
+CC --> CS : 장바구니 로직
+CS --> UCS : 현재 사용자 정보
+GS --> GR : 상품 데이터
+CS --> CR : 장바구니 데이터
+
+' 데이터 레이어 연결
+GR --> DB : SQL 쿼리
+CR --> DB : SQL 쿼리
+
+note top of "Cross-cutting Concerns" : 🌐 시스템 전역에 걸쳐\n모든 요청에 적용되는 기능들
+
+note right of UCI : 📥 모든 HTTP 요청을\n가로채서 사용자 컨텍스트 설정
+
+note right of GCA : 🌍 모든 뷰에서 사용할\n전역 데이터 자동 주입
+
+note right of UCS : 🔗 ThreadLocal을 통한\n요청별 사용자 정보 관리
+
+@enduml
+
+
+@startuml
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontStyle bold
+
+package "Controller Layer" {
+    class ShopController {
+        - goodsService: GoodsService
+        + home(model: Model): String
+        + detail(id: Long, model: Model): String
+    }
+    
+    class CartController {
+        - cartService: CartService
+        + getCartView(model: Model): String
+        + addToCart(productId: Long, quantity: int): String
+        + removeFromCart(productId: Long): String
+    }
+    
+    class GlobalControllerAdvice {
+        - userContextService: UserContextService
+        - cartService: CartService
+        + getCurrentUser(): UserInfo
+        + getCartItemCount(): int
+    }
+}
+
+package "Service Layer" {
+    class GoodsService {
+        - goodsRepository: GoodsRepository
+        + index(): List<Product>
+        + detail(productId: Long): Product
+    }
+    
+    class CartService {
+        - cartRepository: CartRepository
+        - userContextService: UserContextService
+        - findMyCartItems(): List<Cart>
+        + addToCart(productId: Long, quantity: int): void
+        + updateQuantity(productId: Long, newQuantity: int): void
+        + removeFromCart(productId: Long): void
+        + getCartView(): CartViewDto
+        + getCartItemCount(): int
+        - buildViewDto(cartItems: List<Cart>): CartViewDto
+    }
+    
+    class UserContextService {
+        - {static} userContext: ThreadLocal<UserInfo>
+        + setContext(sessionId: String, userId: Long, username: String): void
+        + getCurrentUser(): UserInfo
+        + getSessionId(): String
+        + getUserId(): Long
+        + isLoggedIn(): boolean
+        + getUsername(): String
+        + clear(): void
+    }
+}
+
+package "Repository Layer" {
+    interface GoodsRepository {
+        + findAll(): List<Product>
+    }
+    
+    interface CartRepository {
+        + findByUserId(userId: Long): List<Cart>
+        + findBySessionId(sessionId: String): List<Cart>
+        + upsertCart(userId: Long, sessionId: String, productId: Long, quantity: int): void
+        + updateQuantityByUserId(userId: Long, productId: Long, newQuantity: int): int
+        + updateQuantityBySessionId(sessionId: String, productId: Long, newQuantity: int): int
+        + deleteByUserIdAndProductId(userId: Long, productId: Long): int
+        + deleteBySessionIdAndProductId(sessionId: String, productId: Long): int
+    }
+}
+
+package "Entity Layer" {
+    class Product {
+        - id: Long
+        - name: String
+        - description: String
+        - price: BigDecimal
+        - stockQuantity: Integer
+        - image_url: String
+    }
+    
+    class Cart {
+        - id: Long
+        - userId: Long
+        - sessionId: String
+        - productId: Long
+        - quantity: Integer
+        - product: Product
+    }
+}
+
+package "DTO Layer" {
+    class UserInfo {
+        - sessionId: String
+        - userId: Long
+        - username: String
+        - isLoggedIn: boolean
+        + {static} authenticated(userId: Long, username: String): UserInfo
+        + {static} anonymous(sessionId: String): UserInfo
+    }
+    
+    class CartViewDto {
+        - items: List<CartItemViewDto>
+        - totalPrice: BigDecimal
+        - itemCount: int
+    }
+    
+    class CartItemViewDto {
+        - productName: String
+        - imageUrl: String
+        - price: BigDecimal
+        - quantity: int
+        - totalPrice: BigDecimal
+        - productId: Long
+    }
+}
+
+package "Config Layer" {
+    class WebConfig {
+        - userContextInterceptor: UserContextInterceptor
+        + addInterceptors(registry: InterceptorRegistry): void
+    }
+    
+    class UserContextInterceptor {
+        - userContextService: UserContextService
+        + preHandle(request: HttpServletRequest, response: HttpServletResponse, handler: Object): boolean
+        + afterCompletion(request: HttpServletRequest, response: HttpServletResponse, handler: Object, ex: Exception): void
+    }
+}
+
+' 의존성 관계
+ShopController --> GoodsService
+CartController --> CartService
+GlobalControllerAdvice --> UserContextService
+GlobalControllerAdvice --> CartService
+
+GoodsService --> GoodsRepository
+CartService --> CartRepository
+CartService --> UserContextService
+
+WebConfig --> UserContextInterceptor
+UserContextInterceptor --> UserContextService
+
+' 데이터 관계
+GoodsRepository ..> Product : manages
+CartRepository ..> Cart : manages
+Cart --> Product : references
+
+' DTO 관계
+CartService ..> CartViewDto : creates
+CartViewDto --> CartItemViewDto : contains
+UserContextService ..> UserInfo : manages
+
+' 어노테이션 표시
+note right of ShopController : @Controller\n@RequiredArgsConstructor\n@RequestMapping("/shop")
+note right of CartController : @Controller\n@RequiredArgsConstructor\n@RequestMapping("/cart")
+note right of GlobalControllerAdvice : @ControllerAdvice\n@RequiredArgsConstructor
+note right of GoodsService : @Service\n@RequiredArgsConstructor
+note right of CartService : @Service\n@RequiredArgsConstructor\n@Slf4j
+note right of UserContextService : @Service
+note right of GoodsRepository : @Repository\nCrudRepository<Product, Long>
+note right of CartRepository : @Repository\nJpaRepository<Cart, Long>
+note right of WebConfig : @Configuration\nWebMvcConfigurer
+note right of UserContextInterceptor : @Component\nHandlerInterceptor
+
+@enduml

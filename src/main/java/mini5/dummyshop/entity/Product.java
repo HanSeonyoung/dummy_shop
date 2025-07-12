@@ -20,8 +20,13 @@ public class Product {
     private String description;
     @Column(precision = 10, scale = 2)
     private BigDecimal price;
+<<<<<<< HEAD
     @Column
     private int stock;
+=======
+    @Column(name = "stock_quantity")
+    private int stockQuantity;
+>>>>>>> origin/main
     @Column
     private String category;
     @Column
