@@ -1,0 +1,14 @@
+graph TD
+Client[User Browser]
+Controller[Spring Boot Controller]
+Service[Service Layer]
+Repository[JPA Repository]
+DB[(H2 Database)]
+Template[Thymeleaf Template]
+
+    Client -->|Requst| Controller
+    Controller --> Service
+    Service --> Repository
+    Repository --> DB
+    Controller --> Template
+    Template -->|Rendered HTML| Client
