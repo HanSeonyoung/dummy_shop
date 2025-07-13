@@ -7,6 +7,9 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
 @Entity
 @NoArgsConstructor
 @Data
@@ -26,6 +29,8 @@ public class Product {
     private String category;
     @Column
     private String image_url;
-    @Column
-    private LocalDateTime created_at;
+    @CreationTimestamp
+    private LocalDateTime createdAt;
+    @UpdateTimestamp
+    private LocalDateTime updatedAt;
 }
